@@ -1,0 +1,897 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Monotonic Queue — Hàng đợi đơn điệu</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:ital,wght@0,400;0,700;1,400&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0a0e14;
+    --surface: #111720;
+    --surface2: #161d2a;
+    --border: #1e2d42;
+    --accent: #00d4ff;
+    --accent2: #ff6b35;
+    --accent3: #7fff6b;
+    --text: #c8d8e8;
+    --text-dim: #5a7080;
+    --heading: #e8f4ff;
+    --mono: 'Space Mono', monospace;
+    --sans: 'Syne', sans-serif;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    line-height: 1.7;
+    overflow-x: hidden;
+  }
+
+  /* SCANLINE OVERLAY */
+  body::before {
+    content: '';
+    position: fixed; inset: 0;
+    background: repeating-linear-gradient(
+      0deg, transparent, transparent 2px,
+      rgba(0,0,0,0.06) 2px, rgba(0,0,0,0.06) 4px
+    );
+    pointer-events: none;
+    z-index: 999;
+  }
+
+  /* HEADER */
+  header {
+    position: relative;
+    padding: 80px 60px 60px;
+    border-bottom: 1px solid var(--border);
+    overflow: hidden;
+  }
+
+  header::after {
+    content: 'MONOTONIC\AQUEUE';
+    white-space: pre;
+    position: absolute;
+    right: -20px; top: -10px;
+    font-family: var(--mono);
+    font-size: 120px;
+    font-weight: 700;
+    color: rgba(0,212,255,0.03);
+    letter-spacing: -4px;
+    pointer-events: none;
+  }
+
+  .tag {
+    display: inline-block;
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 3px;
+    color: var(--accent);
+    border: 1px solid var(--accent);
+    padding: 4px 12px;
+    margin-bottom: 24px;
+    text-transform: uppercase;
+  }
+
+  h1 {
+    font-family: var(--sans);
+    font-size: clamp(36px, 6vw, 72px);
+    font-weight: 800;
+    color: var(--heading);
+    line-height: 1.05;
+    letter-spacing: -2px;
+  }
+
+  h1 span { color: var(--accent); }
+
+  .subtitle {
+    font-family: var(--mono);
+    font-size: 14px;
+    color: var(--text-dim);
+    margin-top: 16px;
+  }
+
+  /* LAYOUT */
+  main { max-width: 900px; margin: 0 auto; padding: 60px 40px; }
+
+  /* SECTION HEADERS */
+  .section-label {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 4px;
+    color: var(--accent2);
+    text-transform: uppercase;
+    margin-bottom: 8px;
+  }
+
+  h2 {
+    font-family: var(--sans);
+    font-size: 28px;
+    font-weight: 700;
+    color: var(--heading);
+    letter-spacing: -0.5px;
+    margin-bottom: 20px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  h3 {
+    font-family: var(--sans);
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--accent);
+    margin: 28px 0 12px;
+  }
+
+  p { margin-bottom: 16px; font-size: 15px; }
+
+  section { margin-bottom: 60px; }
+
+  /* CALLOUT BOX */
+  .callout {
+    background: var(--surface);
+    border-left: 3px solid var(--accent);
+    padding: 20px 24px;
+    margin: 24px 0;
+    border-radius: 0 4px 4px 0;
+  }
+  .callout.warn { border-color: var(--accent2); }
+  .callout.tip  { border-color: var(--accent3); }
+
+  .callout-title {
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    margin-bottom: 8px;
+    color: var(--accent);
+  }
+  .callout.warn .callout-title { color: var(--accent2); }
+  .callout.tip  .callout-title { color: var(--accent3); }
+
+  /* CODE BLOCKS */
+  pre {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 24px;
+    overflow-x: auto;
+    margin: 24px 0;
+    position: relative;
+  }
+
+  pre .lang-badge {
+    position: absolute;
+    top: 10px; right: 14px;
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 2px;
+    color: var(--text-dim);
+    text-transform: uppercase;
+  }
+
+  code {
+    font-family: var(--mono);
+    font-size: 13px;
+    line-height: 1.9;
+    color: var(--text);
+  }
+
+  .kw  { color: #ff6b9d; }   /* keywords */
+  .fn  { color: #7ec8e3; }   /* functions */
+  .cm  { color: #4a6070; font-style: italic; } /* comments */
+  .num { color: #f0c040; }   /* numbers */
+  .str { color: #98e4a0; }   /* strings */
+  .tp  { color: #c8a0f0; }   /* types */
+  .op  { color: #ff9960; }   /* operators */
+
+  /* VISUAL DEQUE */
+  .deque-vis {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 32px;
+    margin: 28px 0;
+    overflow-x: auto;
+  }
+
+  .deque-title {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--text-dim);
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    margin-bottom: 20px;
+  }
+
+  .array-row {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    margin-bottom: 16px;
+    flex-wrap: nowrap;
+  }
+
+  .arr-label {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--text-dim);
+    width: 80px;
+    flex-shrink: 0;
+    letter-spacing: 1px;
+  }
+
+  .cell {
+    min-width: 44px;
+    height: 44px;
+    display: flex; align-items: center; justify-content: center;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    font-family: var(--mono);
+    font-size: 14px;
+    font-weight: 700;
+    transition: all 0.2s;
+    flex-shrink: 0;
+  }
+
+  .cell.active  { background: rgba(0,212,255,0.12); border-color: var(--accent); color: var(--accent); }
+  .cell.in-deque{ background: rgba(255,107,53,0.12); border-color: var(--accent2); color: var(--accent2); }
+  .cell.window  { background: rgba(127,255,107,0.08); border-color: var(--accent3); color: var(--accent3); }
+  .cell.result  { background: rgba(255,215,0,0.12); border-color: gold; color: gold; }
+  .cell.dim     { color: var(--text-dim); border-color: #1a2535; background: #0d1420; }
+
+  /* STEP NAVIGATOR */
+  .steps-container {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 28px;
+    margin: 28px 0;
+  }
+
+  .steps-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 24px;
+  }
+
+  .step-counter {
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--text-dim);
+    letter-spacing: 1px;
+  }
+
+  .step-btns {
+    display: flex;
+    gap: 8px;
+  }
+
+  .btn {
+    font-family: var(--mono);
+    font-size: 12px;
+    letter-spacing: 1px;
+    padding: 8px 18px;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    cursor: pointer;
+    background: transparent;
+    color: var(--text);
+    transition: all 0.15s;
+  }
+
+  .btn:hover { border-color: var(--accent); color: var(--accent); }
+  .btn.primary { border-color: var(--accent); color: var(--accent); background: rgba(0,212,255,0.08); }
+  .btn:disabled { opacity: 0.3; cursor: default; }
+
+  .step-desc {
+    font-size: 14px;
+    color: var(--text);
+    margin-top: 16px;
+    min-height: 48px;
+    font-family: var(--mono);
+    line-height: 1.6;
+  }
+
+  .step-desc .highlight { color: var(--accent); font-weight: 700; }
+  .step-desc .warn      { color: var(--accent2); }
+  .step-desc .ok        { color: var(--accent3); }
+
+  /* LEGEND */
+  .legend {
+    display: flex;
+    gap: 20px;
+    flex-wrap: wrap;
+    margin-bottom: 20px;
+  }
+
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--text-dim);
+  }
+
+  .legend-dot {
+    width: 12px; height: 12px;
+    border-radius: 2px;
+    border: 1px solid;
+  }
+
+  /* COMPLEXITY TABLE */
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 20px 0;
+    font-family: var(--mono);
+    font-size: 13px;
+  }
+
+  th {
+    text-align: left;
+    padding: 10px 16px;
+    border-bottom: 2px solid var(--accent);
+    color: var(--accent);
+    font-size: 11px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+  }
+
+  td {
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border);
+    color: var(--text);
+  }
+
+  tr:hover td { background: var(--surface); }
+
+  /* NAV TOC */
+  .toc {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 24px 28px;
+    margin-bottom: 48px;
+  }
+
+  .toc-title {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 4px;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    margin-bottom: 16px;
+  }
+
+  .toc ol {
+    list-style: none;
+    counter-reset: toc;
+  }
+
+  .toc li {
+    counter-increment: toc;
+    padding: 5px 0;
+    font-family: var(--mono);
+    font-size: 13px;
+  }
+
+  .toc li::before {
+    content: "0" counter(toc) ".";
+    color: var(--accent2);
+    margin-right: 12px;
+    font-size: 11px;
+  }
+
+  .toc a { color: var(--text); text-decoration: none; transition: color 0.15s; }
+  .toc a:hover { color: var(--accent); }
+
+  /* FOOTER */
+  footer {
+    border-top: 1px solid var(--border);
+    padding: 32px 60px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--text-dim);
+    letter-spacing: 1px;
+  }
+
+  .inline-code {
+    font-family: var(--mono);
+    font-size: 13px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    padding: 1px 7px;
+    color: var(--accent);
+  }
+
+  /* ANIMATE IN */
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(20px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  section { animation: fadeUp 0.5s ease both; }
+  section:nth-child(1) { animation-delay: 0.1s; }
+  section:nth-child(2) { animation-delay: 0.2s; }
+  section:nth-child(3) { animation-delay: 0.3s; }
+  section:nth-child(4) { animation-delay: 0.4s; }
+  section:nth-child(5) { animation-delay: 0.5s; }
+
+  .glow-dot {
+    display: inline-block;
+    width: 8px; height: 8px;
+    background: var(--accent3);
+    border-radius: 50%;
+    box-shadow: 0 0 8px var(--accent3);
+    margin-right: 8px;
+    animation: pulse 2s infinite;
+  }
+  @keyframes pulse {
+    0%,100% { opacity: 1; }
+    50% { opacity: 0.4; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="tag">Data Structures &amp; Algorithms</div>
+  <h1>Monotonic<br><span>Queue</span></h1>
+  <p class="subtitle">// Hàng đợi đơn điệu — Kỹ thuật tối ưu hoá sliding window</p>
+</header>
+
+<main>
+
+  <div class="toc">
+    <div class="toc-title">Mục lục</div>
+    <ol>
+      <li><a href="#khai-niem">Khái niệm cơ bản</a></li>
+      <li><a href="#truc-quan">Trực quan hoá</a></li>
+      <li><a href="#code">Cài đặt &amp; Code</a></li>
+      <li><a href="#sliding-window">Bài toán Sliding Window Maximum</a></li>
+      <li><a href="#ung-dung">Ứng dụng thực tế</a></li>
+      <li><a href="#do-phuc-tap">Độ phức tạp</a></li>
+    </ol>
+  </div>
+
+  <!-- SECTION 1 -->
+  <section id="khai-niem">
+    <div class="section-label">01 — Concept</div>
+    <h2>Khái niệm cơ bản</h2>
+
+    <p>
+      <strong style="color:var(--heading)">Monotonic Queue</strong> (Hàng đợi đơn điệu) là một cấu trúc dữ liệu dạng deque (double-ended queue) được duy trì sao cho các phần tử trong đó luôn theo thứ tự <em>tăng dần</em> hoặc <em>giảm dần</em>.
+    </p>
+
+    <div class="callout">
+      <div class="callout-title">💡 Định nghĩa</div>
+      Monotonic Queue là deque mà khi thêm phần tử mới vào, ta <strong>loại bỏ</strong> các phần tử đầu/cuối vi phạm tính đơn điệu trước khi chèn — đảm bảo deque luôn có thứ tự nhất quán.
+    </div>
+
+    <h3>Hai biến thể</h3>
+    <p>
+      <span class="inline-code">Tăng dần (Monotonic Increasing)</span> — phần tử nhỏ nhất nằm ở đầu deque. Dùng để tìm <strong style="color:var(--accent3)">minimum</strong> trong cửa sổ.
+    </p>
+    <p>
+      <span class="inline-code">Giảm dần (Monotonic Decreasing)</span> — phần tử lớn nhất nằm ở đầu deque. Dùng để tìm <strong style="color:var(--accent2)">maximum</strong> trong cửa sổ.
+    </p>
+
+    <div class="callout warn">
+      <div class="callout-title">⚠️ Lưu ý</div>
+      Ta thường lưu <strong>chỉ số (index)</strong> thay vì giá trị vào deque, để kiểm tra xem phần tử có còn trong cửa sổ hay không.
+    </div>
+  </section>
+
+  <!-- SECTION 2 -->
+  <section id="truc-quan">
+    <div class="section-label">02 — Visualization</div>
+    <h2>Trực quan hoá từng bước</h2>
+
+    <p>Cho mảng <span class="inline-code">a = [3, 1, 4, 1, 5, 9, 2, 6]</span> và cửa sổ k = <span class="inline-code">3</span>. Ta tìm <strong style="color:var(--accent2)">maximum</strong> trong mỗi cửa sổ (Monotonic Decreasing).</p>
+
+    <div class="steps-container">
+      <div class="steps-header">
+        <div class="step-counter" id="stepCounter">BƯỚC <span id="curStep">1</span> / <span id="totalSteps">8</span></div>
+        <div class="step-btns">
+          <button class="btn" id="prevBtn" onclick="prevStep()" disabled>← PREV</button>
+          <button class="btn primary" id="nextBtn" onclick="nextStep()">NEXT →</button>
+        </div>
+      </div>
+
+      <div class="legend">
+        <div class="legend-item"><div class="legend-dot" style="background:rgba(0,212,255,0.4);border-color:var(--accent)"></div>Phần tử hiện tại</div>
+        <div class="legend-item"><div class="legend-dot" style="background:rgba(255,107,53,0.4);border-color:var(--accent2)"></div>Trong deque</div>
+        <div class="legend-item"><div class="legend-dot" style="background:rgba(127,255,107,0.2);border-color:var(--accent3)"></div>Cửa sổ hiện tại</div>
+        <div class="legend-item"><div class="legend-dot" style="background:rgba(255,215,0,0.2);border-color:gold"></div>Kết quả max</div>
+      </div>
+
+      <div class="deque-vis">
+        <div class="deque-title">Mảng a[ ]</div>
+        <div class="array-row">
+          <div class="arr-label">index:</div>
+          <div id="idxRow"></div>
+        </div>
+        <div class="array-row">
+          <div class="arr-label">value:</div>
+          <div id="arrRow"></div>
+        </div>
+        <div style="height:16px"></div>
+        <div class="deque-title">Deque (lưu index)</div>
+        <div class="array-row">
+          <div class="arr-label">deque:</div>
+          <div id="dequeRow"></div>
+        </div>
+        <div style="height:16px"></div>
+        <div class="deque-title">Kết quả max</div>
+        <div class="array-row">
+          <div class="arr-label">result:</div>
+          <div id="resultRow"></div>
+        </div>
+      </div>
+
+      <div class="step-desc" id="stepDesc"></div>
+    </div>
+  </section>
+
+  <!-- SECTION 3 -->
+  <section id="code">
+    <div class="section-label">03 — Implementation</div>
+    <h2>Cài đặt &amp; Code</h2>
+
+    <h3>Python</h3>
+    <pre><code><span class="lang-badge">python</span><span class="kw">from</span> collections <span class="kw">import</span> deque
+
+<span class="kw">def</span> <span class="fn">sliding_window_maximum</span>(nums: <span class="tp">list</span>, k: <span class="tp">int</span>) -> <span class="tp">list</span>:
+    dq = deque()   <span class="cm"># lưu index, deque giảm dần theo giá trị</span>
+    result = []
+
+    <span class="kw">for</span> i <span class="kw">in</span> <span class="fn">range</span>(<span class="fn">len</span>(nums)):
+        <span class="cm"># 1. Loại phần tử ngoài cửa sổ (index quá cũ)</span>
+        <span class="kw">while</span> dq <span class="kw">and</span> dq[<span class="num">0</span>] <= i - k:
+            dq.<span class="fn">popleft</span>()
+
+        <span class="cm"># 2. Loại phần tử nhỏ hơn phần tử hiện tại (từ đuôi)</span>
+        <span class="kw">while</span> dq <span class="kw">and</span> nums[dq[<span class="op">-1</span>]] <= nums[i]:
+            dq.<span class="fn">pop</span>()
+
+        <span class="cm"># 3. Thêm index hiện tại vào đuôi</span>
+        dq.<span class="fn">append</span>(i)
+
+        <span class="cm"># 4. Đầu deque là max của cửa sổ</span>
+        <span class="kw">if</span> i >= k - <span class="num">1</span>:
+            result.<span class="fn">append</span>(nums[dq[<span class="num">0</span>]])
+
+    <span class="kw">return</span> result</code></pre>
+
+    <h3>C++</h3>
+    <pre><code><span class="lang-badge">c++</span><span class="kw">#include</span> <span class="str">&lt;deque&gt;</span>
+<span class="kw">#include</span> <span class="str">&lt;vector&gt;</span>
+<span class="kw">using namespace</span> std;
+
+<span class="tp">vector</span>&lt;<span class="tp">int</span>&gt; <span class="fn">slidingWindowMax</span>(<span class="tp">vector</span>&lt;<span class="tp">int</span>&gt;&amp; nums, <span class="tp">int</span> k) {
+    <span class="tp">deque</span>&lt;<span class="tp">int</span>&gt; dq;   <span class="cm">// lưu index</span>
+    <span class="tp">vector</span>&lt;<span class="tp">int</span>&gt; result;
+
+    <span class="kw">for</span> (<span class="tp">int</span> i = <span class="num">0</span>; i &lt; nums.<span class="fn">size</span>(); i++) {
+        <span class="cm">// Loại phần tử ngoài cửa sổ</span>
+        <span class="kw">while</span> (!dq.<span class="fn">empty</span>() &amp;&amp; dq.<span class="fn">front</span>() &lt;= i - k)
+            dq.<span class="fn">pop_front</span>();
+
+        <span class="cm">// Duy trì tính đơn điệu giảm dần</span>
+        <span class="kw">while</span> (!dq.<span class="fn">empty</span>() &amp;&amp; nums[dq.<span class="fn">back</span>()] &lt;= nums[i])
+            dq.<span class="fn">pop_back</span>();
+
+        dq.<span class="fn">push_back</span>(i);
+
+        <span class="kw">if</span> (i >= k - <span class="num">1</span>)
+            result.<span class="fn">push_back</span>(nums[dq.<span class="fn">front</span>()]);
+    }
+    <span class="kw">return</span> result;
+}</code></pre>
+
+    <div class="callout tip">
+      <div class="callout-title">✅ Mẫu tổng quát</div>
+      Mọi bài toán Monotonic Queue đều lặp lại <strong>4 bước</strong>: (1) pop front nếu out-of-window, (2) pop back nếu vi phạm đơn điệu, (3) push back index mới, (4) ghi nhận kết quả từ front.
+    </div>
+  </section>
+
+  <!-- SECTION 4 -->
+  <section id="sliding-window">
+    <div class="section-label">04 — Classic Problem</div>
+    <h2>Sliding Window Maximum (LeetCode 239)</h2>
+
+    <p>Đây là bài toán kinh điển nhất cho Monotonic Queue:</p>
+    <p><strong style="color:var(--heading)">Đề:</strong> Cho mảng <span class="inline-code">nums</span> và số nguyên <span class="inline-code">k</span>. Trả về mảng chứa giá trị lớn nhất của mỗi cửa sổ trượt có độ rộng <span class="inline-code">k</span>.</p>
+
+    <div class="deque-vis">
+      <div class="deque-title">Ví dụ minh hoạ</div>
+      <table>
+        <tr>
+          <th>Cửa sổ</th>
+          <th>Các phần tử</th>
+          <th>Maximum</th>
+        </tr>
+        <tr>
+          <td>[0..2]</td>
+          <td>3, 1, <span style="color:var(--accent2)">4</span></td>
+          <td style="color:gold">4</td>
+        </tr>
+        <tr>
+          <td>[1..3]</td>
+          <td>1, <span style="color:var(--accent2)">4</span>, 1</td>
+          <td style="color:gold">4</td>
+        </tr>
+        <tr>
+          <td>[2..4]</td>
+          <td>4, 1, <span style="color:var(--accent2)">5</span></td>
+          <td style="color:gold">5</td>
+        </tr>
+        <tr>
+          <td>[3..5]</td>
+          <td>1, 5, <span style="color:var(--accent2)">9</span></td>
+          <td style="color:gold">9</td>
+        </tr>
+        <tr>
+          <td>[4..6]</td>
+          <td><span style="color:var(--accent2)">9</span>, 2, 6 (vẫn 9)</td>
+          <td style="color:gold">9</td>
+        </tr>
+        <tr>
+          <td>[5..7]</td>
+          <td><span style="color:var(--accent2)">9</span>, 2, 6</td>
+          <td style="color:gold">9</td>
+        </tr>
+      </table>
+      <p style="font-family:var(--mono);font-size:12px;color:var(--text-dim);margin-top:12px">
+        Kết quả: [4, 4, 5, 9, 9, 9]
+      </p>
+    </div>
+
+    <h3>Tại sao không dùng brute force?</h3>
+    <p>Brute force O(n·k) sẽ TLE với n = 10⁵, k = 5×10⁴. Monotonic Queue cho O(n) vì mỗi phần tử chỉ được push/pop <strong>đúng một lần</strong>.</p>
+  </section>
+
+  <!-- SECTION 5 -->
+  <section id="ung-dung">
+    <div class="section-label">05 — Applications</div>
+    <h2>Ứng dụng thực tế</h2>
+
+    <table>
+      <tr>
+        <th>Bài toán</th>
+        <th>Biến thể</th>
+        <th>Ghi chú</th>
+      </tr>
+      <tr>
+        <td>Sliding Window Max/Min</td>
+        <td>Decreasing / Increasing</td>
+        <td>Kinh điển</td>
+      </tr>
+      <tr>
+        <td>Largest Rectangle in Histogram</td>
+        <td>Increasing</td>
+        <td>Kết hợp stack</td>
+      </tr>
+      <tr>
+        <td>Jump Game VI</td>
+        <td>Decreasing</td>
+        <td>DP + deque</td>
+      </tr>
+      <tr>
+        <td>Shortest Subarray with Sum ≥ k</td>
+        <td>Increasing (prefix sum)</td>
+        <td>Nâng cao</td>
+      </tr>
+      <tr>
+        <td>Maximum Sum of Subarray (length ≤ k)</td>
+        <td>Increasing (prefix sum)</td>
+        <td>USACO/IOI style</td>
+      </tr>
+      <tr>
+        <td>DP tối ưu hoá O(n²) → O(n)</td>
+        <td>Tùy bài</td>
+        <td>Monotonic Queue DP</td>
+      </tr>
+    </table>
+
+    <div class="callout tip">
+      <div class="callout-title">🎯 Pattern nhận biết</div>
+      Khi bài toán có dạng <em>"tìm min/max trong đoạn [i-k, i]"</em> hoặc DP với dạng <em>dp[i] = max(dp[j]) + f(i)</em> với j trong khoảng cố định → nghĩ ngay đến Monotonic Queue.
+    </div>
+  </section>
+
+  <!-- SECTION 6 -->
+  <section id="do-phuc-tap">
+    <div class="section-label">06 — Complexity</div>
+    <h2>Độ phức tạp</h2>
+
+    <table>
+      <tr>
+        <th>Phương pháp</th>
+        <th>Thời gian</th>
+        <th>Không gian</th>
+      </tr>
+      <tr>
+        <td>Brute Force</td>
+        <td style="color:var(--accent2)">O(n·k)</td>
+        <td>O(1)</td>
+      </tr>
+      <tr>
+        <td>Segment Tree / Sparse Table</td>
+        <td>O(n log n)</td>
+        <td>O(n log n)</td>
+      </tr>
+      <tr>
+        <td style="color:var(--accent3)"><span class="glow-dot"></span>Monotonic Queue</td>
+        <td style="color:var(--accent3)">O(n)</td>
+        <td style="color:var(--accent3)">O(k)</td>
+      </tr>
+    </table>
+
+    <p style="margin-top:20px"><strong style="color:var(--heading)">Lý do O(n):</strong> Mỗi phần tử được thêm vào deque đúng <strong>1 lần</strong> và bị loại đúng <strong>tối đa 1 lần</strong>. Tổng số thao tác trên deque là O(2n) = O(n).</p>
+
+    <div class="callout">
+      <div class="callout-title">📌 Tóm tắt</div>
+      Monotonic Queue là công cụ cực mạnh khi cần truy vấn min/max trong cửa sổ trượt với độ phức tạp tối ưu O(n). Nắm vững cấu trúc này sẽ mở ra một lớp bài toán DP tối ưu hoá quan trọng trong competitive programming.
+    </div>
+  </section>
+
+</main>
+
+<footer>
+  <div>MONOTONIC QUEUE — DSA SERIES</div>
+  <div>O(N) SLIDING WINDOW</div>
+</footer>
+
+<script>
+// Simulation data
+const arr = [3, 1, 4, 1, 5, 9, 2, 6];
+const K = 3;
+
+const steps = [];
+
+// Build steps manually
+function buildSteps() {
+  let dq = [];
+  let results = new Array(arr.length).fill(null);
+
+  for (let i = 0; i < arr.length; i++) {
+    const removed = [];
+
+    // pop front out of window
+    while (dq.length && dq[0] <= i - K) dq.shift();
+
+    // pop back if smaller
+    while (dq.length && arr[dq[dq.length-1]] <= arr[i]) {
+      removed.push(dq.pop());
+    }
+
+    dq.push(i);
+
+    if (i >= K - 1) results[i] = arr[dq[0]];
+
+    steps.push({
+      current: i,
+      deque: [...dq],
+      results: [...results],
+      removed,
+      window: [Math.max(0, i - K + 1), i]
+    });
+  }
+}
+
+buildSteps();
+
+let curStep = 0;
+
+function renderStep(s) {
+  const { current, deque, results, removed, window: win } = steps[s];
+
+  // INDEX ROW
+  const idxRow = document.getElementById('idxRow');
+  idxRow.innerHTML = '';
+  for (let i = 0; i < arr.length; i++) {
+    const d = document.createElement('div');
+    d.className = 'cell dim';
+    d.textContent = i;
+    d.style.fontSize = '11px';
+    d.style.color = 'var(--text-dim)';
+    d.style.borderColor = '#1a2535';
+    idxRow.appendChild(d);
+  }
+
+  // VALUE ROW
+  const arrRow = document.getElementById('arrRow');
+  arrRow.innerHTML = '';
+  for (let i = 0; i < arr.length; i++) {
+    const d = document.createElement('div');
+    let cls = 'dim';
+    if (i === current) cls = 'active';
+    else if (deque.includes(i)) cls = 'in-deque';
+    else if (i >= win[0] && i <= win[1]) cls = 'window';
+    d.className = `cell ${cls}`;
+    d.textContent = arr[i];
+    arrRow.appendChild(d);
+  }
+
+  // DEQUE ROW
+  const dequeRow = document.getElementById('dequeRow');
+  dequeRow.innerHTML = '';
+  if (deque.length === 0) {
+    const empty = document.createElement('div');
+    empty.style.fontFamily = 'var(--mono)';
+    empty.style.fontSize = '12px';
+    empty.style.color = 'var(--text-dim)';
+    empty.style.padding = '12px';
+    empty.textContent = '[ empty ]';
+    dequeRow.appendChild(empty);
+  }
+  deque.forEach((idx, pos) => {
+    const d = document.createElement('div');
+    d.className = 'cell in-deque';
+    d.innerHTML = `<span style="font-size:10px;display:block;color:var(--text-dim)">[${idx}]</span>${arr[idx]}`;
+    d.style.minWidth = '54px'; d.style.height = '54px';
+    d.style.flexDirection = 'column'; d.style.gap = '2px';
+    if (pos === 0) d.style.boxShadow = '0 0 12px rgba(255,107,53,0.4)';
+    dequeRow.appendChild(d);
+  });
+
+  // RESULT ROW
+  const resultRow = document.getElementById('resultRow');
+  resultRow.innerHTML = '';
+  for (let i = 0; i < arr.length; i++) {
+    const d = document.createElement('div');
+    if (results[i] !== null) {
+      d.className = 'cell result';
+      d.textContent = results[i];
+    } else {
+      d.className = 'cell dim';
+      d.textContent = '·';
+    }
+    resultRow.appendChild(d);
+  }
+
+  // DESCRIPTION
+  const desc = document.getElementById('stepDesc');
+  const { removed: rm } = steps[s];
+
+  let html = `Xử lý <span class="highlight">a[${current}] = ${arr[current]}</span>. `;
+
+  if (rm.length > 0) {
+    html += `<span class="warn">Pop khỏi đuôi deque: index [${rm.join(', ')}]</span> vì giá trị ≤ ${arr[current]}. `;
+  }
+
+  html += `Push index <span class="highlight">${current}</span> vào đuôi. `;
+
+  if (current >= K - 1) {
+    html += `<span class="ok">→ Max của cửa sổ [${win[0]}..${win[1]}] = <strong>${results[current]}</strong></span>`;
+  } else {
+    html += `<span style="color:var(--text-dim)">(Chưa đủ ${K} phần tử)</span>`;
+  }
+
+  desc.innerHTML = html;
+
+  // COUNTER
+  document.getElementById('curStep').textContent = s + 1;
+  document.getElementById('prevBtn').disabled = s === 0;
+  document.getElementById('nextBtn').disabled = s === steps.length - 1;
+}
+
+function nextStep() { if (curStep < steps.length - 1) { curStep++; renderStep(curStep); } }
+function prevStep() { if (curStep > 0) { curStep--; renderStep(curStep); } }
+
+document.getElementById('totalSteps').textContent = steps.length;
+renderStep(0);
+</script>
+</body>
+</html>
